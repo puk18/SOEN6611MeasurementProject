@@ -1,0 +1,995 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FastDateParser.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons Lang</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.lang3.time</a> &gt; <span class="el_source">FastDateParser.java</span></div><h1>FastDateParser.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.lang3.time;
+
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.Serializable;
+import java.text.DateFormatSymbols;
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * &lt;p&gt;FastDateParser is a fast and thread-safe version of
+ * {@link java.text.SimpleDateFormat}.&lt;/p&gt;
+ *
+ * &lt;p&gt;To obtain a proxy to a FastDateParser, use {@link FastDateFormat#getInstance(String, TimeZone, Locale)}
+ * or another variation of the factory methods of {@link FastDateFormat}.&lt;/p&gt;
+ *
+ * &lt;p&gt;Since FastDateParser is thread safe, you can use a static member instance:&lt;/p&gt;
+ * &lt;code&gt;
+ *     private static final DateParser DATE_PARSER = FastDateFormat.getInstance(&quot;yyyy-MM-dd&quot;);
+ * &lt;/code&gt;
+ *
+ * &lt;p&gt;This class can be used as a direct replacement for
+ * {@code SimpleDateFormat} in most parsing situations.
+ * This class is especially useful in multi-threaded server environments.
+ * {@code SimpleDateFormat} is not thread-safe in any JDK version,
+ * nor will it be as Sun has closed the
+ * &lt;a href=&quot;http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4228335&quot;&gt;bug&lt;/a&gt;/RFE.
+ * &lt;/p&gt;
+ *
+ * &lt;p&gt;Only parsing is supported by this class, but all patterns are compatible with
+ * SimpleDateFormat.&lt;/p&gt;
+ *
+ * &lt;p&gt;The class operates in lenient mode, so for example a time of 90 minutes is treated as 1 hour 30 minutes.&lt;/p&gt;
+ *
+ * &lt;p&gt;Timing tests indicate this class is as about as fast as SimpleDateFormat
+ * in single thread applications and about 25% faster in multi-thread applications.&lt;/p&gt;
+ *
+ * @since 3.2
+ * @see FastDatePrinter
+ */
+public class FastDateParser implements DateParser, Serializable {
+
+    /**
+     * Required for serialization support.
+     *
+     * @see java.io.Serializable
+     */
+    private static final long serialVersionUID = 3L;
+
+<span class="fc" id="L82">    static final Locale JAPANESE_IMPERIAL = new Locale(&quot;ja&quot;, &quot;JP&quot;, &quot;JP&quot;);</span>
+
+    // defining fields
+    private final String pattern;
+    private final TimeZone timeZone;
+    private final Locale locale;
+    private final int century;
+    private final int startYear;
+
+    // derived fields
+    private transient List&lt;StrategyAndWidth&gt; patterns;
+
+    // comparator used to sort regex alternatives
+    // alternatives should be ordered longer first, and shorter last. ('february' before 'feb')
+    // all entries must be lowercase by locale.
+<span class="fc" id="L97">    private static final Comparator&lt;String&gt; LONGER_FIRST_LOWERCASE = (left, right) -&gt; right.compareTo(left);</span>
+
+    /**
+     * &lt;p&gt;Constructs a new FastDateParser.&lt;/p&gt;
+     *
+     * Use {@link FastDateFormat#getInstance(String, TimeZone, Locale)} or another variation of the
+     * factory methods of {@link FastDateFormat} to get a cached FastDateParser instance.
+     *
+     * @param pattern non-null {@link java.text.SimpleDateFormat} compatible
+     *  pattern
+     * @param timeZone non-null time zone to use
+     * @param locale non-null locale
+     */
+    protected FastDateParser(final String pattern, final TimeZone timeZone, final Locale locale) {
+<span class="fc" id="L111">        this(pattern, timeZone, locale, null);</span>
+<span class="fc" id="L112">    }</span>
+
+    /**
+     * &lt;p&gt;Constructs a new FastDateParser.&lt;/p&gt;
+     *
+     * @param pattern non-null {@link java.text.SimpleDateFormat} compatible
+     *  pattern
+     * @param timeZone non-null time zone to use
+     * @param locale non-null locale
+     * @param centuryStart The start of the century for 2 digit year parsing
+     *
+     * @since 3.5
+     */
+<span class="fc" id="L125">    protected FastDateParser(final String pattern, final TimeZone timeZone, final Locale locale, final Date centuryStart) {</span>
+<span class="fc" id="L126">        this.pattern = pattern;</span>
+<span class="fc" id="L127">        this.timeZone = timeZone;</span>
+<span class="fc" id="L128">        this.locale = locale;</span>
+
+<span class="fc" id="L130">        final Calendar definingCalendar = Calendar.getInstance(timeZone, locale);</span>
+
+        int centuryStartYear;
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        if (centuryStart!=null) {</span>
+<span class="fc" id="L134">            definingCalendar.setTime(centuryStart);</span>
+<span class="fc" id="L135">            centuryStartYear= definingCalendar.get(Calendar.YEAR);</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">        } else if (locale.equals(JAPANESE_IMPERIAL)) {</span>
+<span class="fc" id="L137">            centuryStartYear= 0;</span>
+        } else {
+            // from 80 years ago to 20 years from now
+<span class="fc" id="L140">            definingCalendar.setTime(new Date());</span>
+<span class="fc" id="L141">            centuryStartYear= definingCalendar.get(Calendar.YEAR)-80;</span>
+        }
+<span class="fc" id="L143">        century= centuryStartYear / 100 * 100;</span>
+<span class="fc" id="L144">        startYear= centuryStartYear - century;</span>
+
+<span class="fc" id="L146">        init(definingCalendar);</span>
+<span class="fc" id="L147">    }</span>
+
+    /**
+     * Initialize derived fields from defining fields.
+     * This is called from constructor and from readObject (de-serialization)
+     *
+     * @param definingCalendar the {@link java.util.Calendar} instance used to initialize this FastDateParser
+     */
+    private void init(final Calendar definingCalendar) {
+<span class="fc" id="L156">        patterns = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L158">        final StrategyParser fm = new StrategyParser(definingCalendar);</span>
+        for (;;) {
+<span class="fc" id="L160">            final StrategyAndWidth field = fm.getNextStrategy();</span>
+<span class="fc bfc" id="L161" title="All 2 branches covered.">            if (field==null) {</span>
+<span class="fc" id="L162">                break;</span>
+            }
+<span class="fc" id="L164">            patterns.add(field);</span>
+<span class="fc" id="L165">        }</span>
+<span class="fc" id="L166">    }</span>
+
+    // helper classes to parse the format string
+    //-----------------------------------------------------------------------
+
+    /**
+     * Holds strategy and field width
+     */
+    private static class StrategyAndWidth {
+        final Strategy strategy;
+        final int width;
+
+<span class="fc" id="L178">        StrategyAndWidth(final Strategy strategy, final int width) {</span>
+<span class="fc" id="L179">            this.strategy = strategy;</span>
+<span class="fc" id="L180">            this.width = width;</span>
+<span class="fc" id="L181">        }</span>
+
+        int getMaxWidth(final ListIterator&lt;StrategyAndWidth&gt; lt) {
+<span class="fc bfc" id="L184" title="All 4 branches covered.">            if (!strategy.isNumber() || !lt.hasNext()) {</span>
+<span class="fc" id="L185">                return 0;</span>
+            }
+<span class="fc" id="L187">            final Strategy nextStrategy = lt.next().strategy;</span>
+<span class="fc" id="L188">            lt.previous();</span>
+<span class="fc bfc" id="L189" title="All 2 branches covered.">            return nextStrategy.isNumber() ?width :0;</span>
+       }
+    }
+
+    /**
+     * Parse format into Strategies
+     */
+    private class StrategyParser {
+        private final Calendar definingCalendar;
+        private int currentIdx;
+
+<span class="fc" id="L200">        StrategyParser(final Calendar definingCalendar) {</span>
+<span class="fc" id="L201">            this.definingCalendar = definingCalendar;</span>
+<span class="fc" id="L202">        }</span>
+
+        StrategyAndWidth getNextStrategy() {
+<span class="fc bfc" id="L205" title="All 2 branches covered.">            if (currentIdx &gt;= pattern.length()) {</span>
+<span class="fc" id="L206">                return null;</span>
+            }
+
+<span class="fc" id="L209">            final char c = pattern.charAt(currentIdx);</span>
+<span class="fc bfc" id="L210" title="All 2 branches covered.">            if (isFormatLetter(c)) {</span>
+<span class="fc" id="L211">                return letterPattern(c);</span>
+            }
+<span class="fc" id="L213">            return literal();</span>
+        }
+
+        private StrategyAndWidth letterPattern(final char c) {
+<span class="fc" id="L217">            final int begin = currentIdx;</span>
+<span class="fc bfc" id="L218" title="All 2 branches covered.">            while (++currentIdx &lt; pattern.length()) {</span>
+<span class="fc bfc" id="L219" title="All 2 branches covered.">                if (pattern.charAt(currentIdx) != c) {</span>
+<span class="fc" id="L220">                    break;</span>
+                }
+            }
+
+<span class="fc" id="L224">            final int width = currentIdx - begin;</span>
+<span class="fc" id="L225">            return new StrategyAndWidth(getStrategy(c, width, definingCalendar), width);</span>
+        }
+
+        private StrategyAndWidth literal() {
+<span class="fc" id="L229">            boolean activeQuote = false;</span>
+
+<span class="fc" id="L231">            final StringBuilder sb = new StringBuilder();</span>
+<span class="fc bfc" id="L232" title="All 2 branches covered.">            while (currentIdx &lt; pattern.length()) {</span>
+<span class="fc" id="L233">                final char c = pattern.charAt(currentIdx);</span>
+<span class="fc bfc" id="L234" title="All 4 branches covered.">                if (!activeQuote &amp;&amp; isFormatLetter(c)) {</span>
+<span class="fc" id="L235">                    break;</span>
+<span class="fc bfc" id="L236" title="All 6 branches covered.">                } else if (c == '\'' &amp;&amp; (++currentIdx == pattern.length() || pattern.charAt(currentIdx) != '\'')) {</span>
+<span class="fc bfc" id="L237" title="All 2 branches covered.">                    activeQuote = !activeQuote;</span>
+<span class="fc" id="L238">                    continue;</span>
+                }
+<span class="fc" id="L240">                ++currentIdx;</span>
+<span class="fc" id="L241">                sb.append(c);</span>
+<span class="fc" id="L242">            }</span>
+
+<span class="fc bfc" id="L244" title="All 2 branches covered.">            if (activeQuote) {</span>
+<span class="fc" id="L245">                throw new IllegalArgumentException(&quot;Unterminated quote&quot;);</span>
+            }
+
+<span class="fc" id="L248">            final String formatField = sb.toString();</span>
+<span class="fc" id="L249">            return new StrategyAndWidth(new CopyQuotedStrategy(formatField), formatField.length());</span>
+        }
+    }
+
+    private static boolean isFormatLetter(final char c) {
+<span class="pc bpc" id="L254" title="1 of 8 branches missed.">        return c &gt;= 'A' &amp;&amp; c &lt;= 'Z' || c &gt;= 'a' &amp;&amp; c &lt;= 'z';</span>
+    }
+
+    // Accessors
+    //-----------------------------------------------------------------------
+    /* (non-Javadoc)
+     * @see org.apache.commons.lang3.time.DateParser#getPattern()
+     */
+    @Override
+    public String getPattern() {
+<span class="fc" id="L264">        return pattern;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.commons.lang3.time.DateParser#getTimeZone()
+     */
+    @Override
+    public TimeZone getTimeZone() {
+<span class="fc" id="L272">        return timeZone;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.commons.lang3.time.DateParser#getLocale()
+     */
+    @Override
+    public Locale getLocale() {
+<span class="fc" id="L280">        return locale;</span>
+    }
+
+
+    // Basics
+    //-----------------------------------------------------------------------
+    /**
+     * &lt;p&gt;Compare another object for equality with this object.&lt;/p&gt;
+     *
+     * @param obj  the object to compare to
+     * @return {@code true}if equal to this instance
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L294" title="All 2 branches covered.">        if (!(obj instanceof FastDateParser)) {</span>
+<span class="fc" id="L295">            return false;</span>
+        }
+<span class="fc" id="L297">        final FastDateParser other = (FastDateParser) obj;</span>
+<span class="pc bpc" id="L298" title="1 of 2 branches missed.">        return pattern.equals(other.pattern)</span>
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">            &amp;&amp; timeZone.equals(other.timeZone)</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">            &amp;&amp; locale.equals(other.locale);</span>
+    }
+
+    /**
+     * &lt;p&gt;Return a hash code compatible with equals.&lt;/p&gt;
+     *
+     * @return a hash code compatible with equals
+     */
+    @Override
+    public int hashCode() {
+<span class="fc" id="L310">        return pattern.hashCode() + 13 * (timeZone.hashCode() + 13 * locale.hashCode());</span>
+    }
+
+    /**
+     * &lt;p&gt;Get a string version of this formatter.&lt;/p&gt;
+     *
+     * @return a debugging string
+     */
+    @Override
+    public String toString() {
+<span class="fc" id="L320">        return &quot;FastDateParser[&quot; + pattern + &quot;,&quot; + locale + &quot;,&quot; + timeZone.getID() + &quot;]&quot;;</span>
+    }
+
+    // Serializing
+    //-----------------------------------------------------------------------
+    /**
+     * Create the object after serialization. This implementation reinitializes the
+     * transient properties.
+     *
+     * @param in ObjectInputStream from which the object is being deserialized.
+     * @throws IOException if there is an IO issue.
+     * @throws ClassNotFoundException if a class cannot be found.
+     */
+    private void readObject(final ObjectInputStream in) throws IOException, ClassNotFoundException {
+<span class="fc" id="L334">        in.defaultReadObject();</span>
+
+<span class="fc" id="L336">        final Calendar definingCalendar = Calendar.getInstance(timeZone, locale);</span>
+<span class="fc" id="L337">        init(definingCalendar);</span>
+<span class="fc" id="L338">    }</span>
+
+    /* (non-Javadoc)
+     * @see org.apache.commons.lang3.time.DateParser#parseObject(java.lang.String)
+     */
+    @Override
+    public Object parseObject(final String source) throws ParseException {
+<span class="nc" id="L345">        return parse(source);</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.commons.lang3.time.DateParser#parse(java.lang.String)
+     */
+    @Override
+    public Date parse(final String source) throws ParseException {
+<span class="fc" id="L353">        final ParsePosition pp = new ParsePosition(0);</span>
+<span class="fc" id="L354">        final Date date= parse(source, pp);</span>
+<span class="fc bfc" id="L355" title="All 2 branches covered.">        if (date == null) {</span>
+            // Add a note re supported date range
+<span class="fc bfc" id="L357" title="All 2 branches covered.">            if (locale.equals(JAPANESE_IMPERIAL)) {</span>
+<span class="fc" id="L358">                throw new ParseException(</span>
+                        &quot;(The &quot; +locale + &quot; locale does not support dates before 1868 AD)\n&quot; +
+<span class="fc" id="L360">                                &quot;Unparseable date: \&quot;&quot;+source, pp.getErrorIndex());</span>
+            }
+<span class="fc" id="L362">            throw new ParseException(&quot;Unparseable date: &quot;+source, pp.getErrorIndex());</span>
+        }
+<span class="fc" id="L364">        return date;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.commons.lang3.time.DateParser#parseObject(java.lang.String, java.text.ParsePosition)
+     */
+    @Override
+    public Object parseObject(final String source, final ParsePosition pos) {
+<span class="fc" id="L372">        return parse(source, pos);</span>
+    }
+
+    /**
+     * This implementation updates the ParsePosition if the parse succeeds.
+     * However, it sets the error index to the position before the failed field unlike
+     * the method {@link java.text.SimpleDateFormat#parse(String, ParsePosition)} which sets
+     * the error index to after the failed field.
+     * &lt;p&gt;
+     * To determine if the parse has succeeded, the caller must check if the current parse position
+     * given by {@link ParsePosition#getIndex()} has been updated. If the input buffer has been fully
+     * parsed, then the index will point to just after the end of the input buffer.
+     *
+     * @see org.apache.commons.lang3.time.DateParser#parse(java.lang.String, java.text.ParsePosition)
+     */
+    @Override
+    public Date parse(final String source, final ParsePosition pos) {
+        // timing tests indicate getting new instance is 19% faster than cloning
+<span class="fc" id="L390">        final Calendar cal= Calendar.getInstance(timeZone, locale);</span>
+<span class="fc" id="L391">        cal.clear();</span>
+
+<span class="fc bfc" id="L393" title="All 2 branches covered.">        return parse(source, pos, cal) ? cal.getTime() : null;</span>
+    }
+
+    /**
+     * Parse a formatted date string according to the format.  Updates the Calendar with parsed fields.
+     * Upon success, the ParsePosition index is updated to indicate how much of the source text was consumed.
+     * Not all source text needs to be consumed.  Upon parse failure, ParsePosition error index is updated to
+     * the offset of the source text which does not match the supplied format.
+     *
+     * @param source The text to parse.
+     * @param pos On input, the position in the source to start parsing, on output, updated position.
+     * @param calendar The calendar into which to set parsed fields.
+     * @return true, if source has been parsed (pos parsePosition is updated); otherwise false (and pos errorIndex is updated)
+     * @throws IllegalArgumentException when Calendar has been set to be not lenient, and a parsed field is
+     * out of range.
+     */
+    @Override
+    public boolean parse(final String source, final ParsePosition pos, final Calendar calendar) {
+<span class="fc" id="L411">        final ListIterator&lt;StrategyAndWidth&gt; lt = patterns.listIterator();</span>
+<span class="fc bfc" id="L412" title="All 2 branches covered.">        while (lt.hasNext()) {</span>
+<span class="fc" id="L413">            final StrategyAndWidth strategyAndWidth = lt.next();</span>
+<span class="fc" id="L414">            final int maxWidth = strategyAndWidth.getMaxWidth(lt);</span>
+<span class="fc bfc" id="L415" title="All 2 branches covered.">            if (!strategyAndWidth.strategy.parse(this, calendar, source, pos, maxWidth)) {</span>
+<span class="fc" id="L416">                return false;</span>
+            }
+<span class="fc" id="L418">        }</span>
+<span class="fc" id="L419">        return true;</span>
+    }
+
+    // Support for strategies
+    //-----------------------------------------------------------------------
+
+    private static StringBuilder simpleQuote(final StringBuilder sb, final String value) {
+<span class="fc bfc" id="L426" title="All 2 branches covered.">        for (int i = 0; i &lt; value.length(); ++i) {</span>
+<span class="fc" id="L427">            final char c = value.charAt(i);</span>
+<span class="fc bfc" id="L428" title="All 2 branches covered.">            switch (c) {</span>
+            case '\\':
+            case '^':
+            case '$':
+            case '.':
+            case '|':
+            case '?':
+            case '*':
+            case '+':
+            case '(':
+            case ')':
+            case '[':
+            case '{':
+<span class="fc" id="L441">                sb.append('\\');</span>
+            default:
+<span class="fc" id="L443">                sb.append(c);</span>
+            }
+        }
+<span class="fc bfc" id="L446" title="All 2 branches covered.">        if (sb.charAt(sb.length() - 1) == '.') {</span>
+            // trailing '.' is optional
+<span class="fc" id="L448">            sb.append('?');</span>
+        }
+<span class="fc" id="L450">        return sb;</span>
+    }
+
+    /**
+     * Gets the short and long values displayed for a field
+     * @param cal The calendar to obtain the short and long values
+     * @param locale The locale of display names
+     * @param field The field of interest
+     * @param regex The regular expression to build
+     * @return The map of string display names to field values
+     */
+    private static Map&lt;String, Integer&gt; appendDisplayNames(final Calendar cal, final Locale locale, final int field, final StringBuilder regex) {
+<span class="fc" id="L462">        final Map&lt;String, Integer&gt; values = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L464">        final Map&lt;String, Integer&gt; displayNames = cal.getDisplayNames(field, Calendar.ALL_STYLES, locale);</span>
+<span class="fc" id="L465">        final TreeSet&lt;String&gt; sorted = new TreeSet&lt;&gt;(LONGER_FIRST_LOWERCASE);</span>
+<span class="fc bfc" id="L466" title="All 2 branches covered.">        for (final Map.Entry&lt;String, Integer&gt; displayName : displayNames.entrySet()) {</span>
+<span class="fc" id="L467">            final String key = displayName.getKey().toLowerCase(locale);</span>
+<span class="fc bfc" id="L468" title="All 2 branches covered.">            if (sorted.add(key)) {</span>
+<span class="fc" id="L469">                values.put(key, displayName.getValue());</span>
+            }
+<span class="fc" id="L471">        }</span>
+<span class="fc bfc" id="L472" title="All 2 branches covered.">        for (final String symbol : sorted) {</span>
+<span class="fc" id="L473">            simpleQuote(regex, symbol).append('|');</span>
+<span class="fc" id="L474">        }</span>
+<span class="fc" id="L475">        return values;</span>
+    }
+
+    /**
+     * Adjust dates to be within appropriate century
+     * @param twoDigitYear The year to adjust
+     * @return A value between centuryStart(inclusive) to centuryStart+100(exclusive)
+     */
+    private int adjustYear(final int twoDigitYear) {
+<span class="fc" id="L484">        final int trial = century + twoDigitYear;</span>
+<span class="fc bfc" id="L485" title="All 2 branches covered.">        return twoDigitYear &gt;= startYear ? trial : trial + 100;</span>
+    }
+
+    /**
+     * A strategy to parse a single field from the parsing pattern
+     */
+    private abstract static class Strategy {
+        /**
+         * Is this field a number?
+         * The default implementation returns false.
+         *
+         * @return true, if field is a number
+         */
+        boolean isNumber() {
+<span class="nc" id="L499">            return false;</span>
+        }
+
+        abstract boolean parse(FastDateParser parser, Calendar calendar, String source, ParsePosition pos, int maxWidth);
+    }
+
+    /**
+     * A strategy to parse a single field from the parsing pattern
+     */
+<span class="fc" id="L508">    private abstract static class PatternStrategy extends Strategy {</span>
+
+        private Pattern pattern;
+
+        void createPattern(final StringBuilder regex) {
+<span class="fc" id="L513">            createPattern(regex.toString());</span>
+<span class="fc" id="L514">        }</span>
+
+        void createPattern(final String regex) {
+<span class="fc" id="L517">            this.pattern = Pattern.compile(regex);</span>
+<span class="fc" id="L518">        }</span>
+
+        /**
+         * Is this field a number?
+         * The default implementation returns false.
+         *
+         * @return true, if field is a number
+         */
+        @Override
+        boolean isNumber() {
+<span class="fc" id="L528">            return false;</span>
+        }
+
+        @Override
+        boolean parse(final FastDateParser parser, final Calendar calendar, final String source, final ParsePosition pos, final int maxWidth) {
+<span class="fc" id="L533">            final Matcher matcher = pattern.matcher(source.substring(pos.getIndex()));</span>
+<span class="fc bfc" id="L534" title="All 2 branches covered.">            if (!matcher.lookingAt()) {</span>
+<span class="fc" id="L535">                pos.setErrorIndex(pos.getIndex());</span>
+<span class="fc" id="L536">                return false;</span>
+            }
+<span class="fc" id="L538">            pos.setIndex(pos.getIndex() + matcher.end(1));</span>
+<span class="fc" id="L539">            setCalendar(parser, calendar, matcher.group(1));</span>
+<span class="fc" id="L540">            return true;</span>
+        }
+
+        abstract void setCalendar(FastDateParser parser, Calendar cal, String value);
+    }
+
+    /**
+     * Obtain a Strategy given a field from a SimpleDateFormat pattern
+     * @param f A sub-sequence of the SimpleDateFormat pattern
+     * @param definingCalendar The calendar to obtain the short and long values
+     * @return The Strategy that will handle parsing for the field
+     */
+    private Strategy getStrategy(final char f, final int width, final Calendar definingCalendar) {
+<span class="fc bfc" id="L553" title="All 22 branches covered.">        switch(f) {</span>
+        default:
+<span class="fc" id="L555">            throw new IllegalArgumentException(&quot;Format '&quot;+f+&quot;' not supported&quot;);</span>
+        case 'D':
+<span class="fc" id="L557">            return DAY_OF_YEAR_STRATEGY;</span>
+        case 'E':
+<span class="fc" id="L559">            return getLocaleSpecificStrategy(Calendar.DAY_OF_WEEK, definingCalendar);</span>
+        case 'F':
+<span class="fc" id="L561">            return DAY_OF_WEEK_IN_MONTH_STRATEGY;</span>
+        case 'G':
+<span class="fc" id="L563">            return getLocaleSpecificStrategy(Calendar.ERA, definingCalendar);</span>
+        case 'H':  // Hour in day (0-23)
+<span class="fc" id="L565">            return HOUR_OF_DAY_STRATEGY;</span>
+        case 'K':  // Hour in am/pm (0-11)
+<span class="fc" id="L567">            return HOUR_STRATEGY;</span>
+        case 'M':
+<span class="fc bfc" id="L569" title="All 2 branches covered.">            return width&gt;=3 ?getLocaleSpecificStrategy(Calendar.MONTH, definingCalendar) :NUMBER_MONTH_STRATEGY;</span>
+        case 'S':
+<span class="fc" id="L571">            return MILLISECOND_STRATEGY;</span>
+        case 'W':
+<span class="fc" id="L573">            return WEEK_OF_MONTH_STRATEGY;</span>
+        case 'a':
+<span class="fc" id="L575">            return getLocaleSpecificStrategy(Calendar.AM_PM, definingCalendar);</span>
+        case 'd':
+<span class="fc" id="L577">            return DAY_OF_MONTH_STRATEGY;</span>
+        case 'h':  // Hour in am/pm (1-12), i.e. midday/midnight is 12, not 0
+<span class="fc" id="L579">            return HOUR12_STRATEGY;</span>
+        case 'k':  // Hour in day (1-24), i.e. midnight is 24, not 0
+<span class="fc" id="L581">            return HOUR24_OF_DAY_STRATEGY;</span>
+        case 'm':
+<span class="fc" id="L583">            return MINUTE_STRATEGY;</span>
+        case 's':
+<span class="fc" id="L585">            return SECOND_STRATEGY;</span>
+        case 'u':
+<span class="fc" id="L587">            return DAY_OF_WEEK_STRATEGY;</span>
+        case 'w':
+<span class="fc" id="L589">            return WEEK_OF_YEAR_STRATEGY;</span>
+        case 'y':
+        case 'Y':
+<span class="fc bfc" id="L592" title="All 2 branches covered.">            return width&gt;2 ?LITERAL_YEAR_STRATEGY :ABBREVIATED_YEAR_STRATEGY;</span>
+        case 'X':
+<span class="fc" id="L594">            return ISO8601TimeZoneStrategy.getStrategy(width);</span>
+        case 'Z':
+<span class="fc bfc" id="L596" title="All 2 branches covered.">            if (width==2) {</span>
+<span class="fc" id="L597">                return ISO8601TimeZoneStrategy.ISO_8601_3_STRATEGY;</span>
+            }
+            //$FALL-THROUGH$
+        case 'z':
+<span class="fc" id="L601">            return getLocaleSpecificStrategy(Calendar.ZONE_OFFSET, definingCalendar);</span>
+        }
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;) // OK because we are creating an array with no entries
+<span class="fc" id="L606">    private static final ConcurrentMap&lt;Locale, Strategy&gt;[] caches = new ConcurrentMap[Calendar.FIELD_COUNT];</span>
+
+    /**
+     * Gets a cache of Strategies for a particular field
+     * @param field The Calendar field
+     * @return a cache of Locale to Strategy
+     */
+    private static ConcurrentMap&lt;Locale, Strategy&gt; getCache(final int field) {
+<span class="fc" id="L614">        synchronized (caches) {</span>
+<span class="fc bfc" id="L615" title="All 2 branches covered.">            if (caches[field] == null) {</span>
+<span class="fc" id="L616">                caches[field] = new ConcurrentHashMap&lt;&gt;(3);</span>
+            }
+<span class="fc" id="L618">            return caches[field];</span>
+        }
+    }
+
+    /**
+     * Constructs a Strategy that parses a Text field
+     * @param field The Calendar field
+     * @param definingCalendar The calendar to obtain the short and long values
+     * @return a TextStrategy for the field and Locale
+     */
+    private Strategy getLocaleSpecificStrategy(final int field, final Calendar definingCalendar) {
+<span class="fc" id="L629">        final ConcurrentMap&lt;Locale, Strategy&gt; cache = getCache(field);</span>
+<span class="fc" id="L630">        Strategy strategy = cache.get(locale);</span>
+<span class="fc bfc" id="L631" title="All 2 branches covered.">        if (strategy == null) {</span>
+<span class="fc bfc" id="L632" title="All 2 branches covered.">            strategy = field == Calendar.ZONE_OFFSET</span>
+                    ? new TimeZoneStrategy(locale)
+                    : new CaseInsensitiveTextStrategy(field, definingCalendar, locale);
+<span class="fc" id="L635">            final Strategy inCache = cache.putIfAbsent(locale, strategy);</span>
+<span class="pc bpc" id="L636" title="1 of 2 branches missed.">            if (inCache != null) {</span>
+<span class="nc" id="L637">                return inCache;</span>
+            }
+        }
+<span class="fc" id="L640">        return strategy;</span>
+    }
+
+    /**
+     * A strategy that copies the static or quoted field in the parsing pattern
+     */
+    private static class CopyQuotedStrategy extends Strategy {
+
+        private final String formatField;
+
+        /**
+         * Constructs a Strategy that ensures the formatField has literal text
+         * @param formatField The literal text to match
+         */
+<span class="fc" id="L654">        CopyQuotedStrategy(final String formatField) {</span>
+<span class="fc" id="L655">            this.formatField = formatField;</span>
+<span class="fc" id="L656">        }</span>
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        boolean isNumber() {
+<span class="fc" id="L663">            return false;</span>
+        }
+
+        @Override
+        boolean parse(final FastDateParser parser, final Calendar calendar, final String source, final ParsePosition pos, final int maxWidth) {
+<span class="fc bfc" id="L668" title="All 2 branches covered.">            for (int idx = 0; idx &lt; formatField.length(); ++idx) {</span>
+<span class="fc" id="L669">                final int sIdx = idx + pos.getIndex();</span>
+<span class="fc bfc" id="L670" title="All 2 branches covered.">                if (sIdx == source.length()) {</span>
+<span class="fc" id="L671">                    pos.setErrorIndex(sIdx);</span>
+<span class="fc" id="L672">                    return false;</span>
+                }
+<span class="fc bfc" id="L674" title="All 2 branches covered.">                if (formatField.charAt(idx) != source.charAt(sIdx)) {</span>
+<span class="fc" id="L675">                    pos.setErrorIndex(sIdx);</span>
+<span class="fc" id="L676">                    return false;</span>
+                }
+            }
+<span class="fc" id="L679">            pos.setIndex(formatField.length() + pos.getIndex());</span>
+<span class="fc" id="L680">            return true;</span>
+        }
+    }
+
+    /**
+     * A strategy that handles a text field in the parsing pattern
+     */
+     private static class CaseInsensitiveTextStrategy extends PatternStrategy {
+        private final int field;
+        final Locale locale;
+        private final Map&lt;String, Integer&gt; lKeyValues;
+
+        /**
+         * Constructs a Strategy that parses a Text field
+         * @param field  The Calendar field
+         * @param definingCalendar  The Calendar to use
+         * @param locale  The Locale to use
+         */
+<span class="fc" id="L698">        CaseInsensitiveTextStrategy(final int field, final Calendar definingCalendar, final Locale locale) {</span>
+<span class="fc" id="L699">            this.field = field;</span>
+<span class="fc" id="L700">            this.locale = locale;</span>
+
+<span class="fc" id="L702">            final StringBuilder regex = new StringBuilder();</span>
+<span class="fc" id="L703">            regex.append(&quot;((?iu)&quot;);</span>
+<span class="fc" id="L704">            lKeyValues = appendDisplayNames(definingCalendar, locale, field, regex);</span>
+<span class="fc" id="L705">            regex.setLength(regex.length()-1);</span>
+<span class="fc" id="L706">            regex.append(&quot;)&quot;);</span>
+<span class="fc" id="L707">            createPattern(regex);</span>
+<span class="fc" id="L708">        }</span>
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        void setCalendar(final FastDateParser parser, final Calendar cal, final String value) {
+<span class="fc" id="L715">            final String lowerCase = value.toLowerCase(locale);</span>
+<span class="fc" id="L716">            Integer iVal = lKeyValues.get(lowerCase);</span>
+<span class="fc bfc" id="L717" title="All 2 branches covered.">            if (iVal == null) {</span>
+                // match missing the optional trailing period
+<span class="fc" id="L719">                iVal = lKeyValues.get(lowerCase + '.');</span>
+            }
+<span class="fc" id="L721">            cal.set(field, iVal.intValue());</span>
+<span class="fc" id="L722">        }</span>
+    }
+
+
+    /**
+     * A strategy that handles a number field in the parsing pattern
+     */
+    private static class NumberStrategy extends Strategy {
+        private final int field;
+
+        /**
+         * Constructs a Strategy that parses a Number field
+         * @param field The Calendar field
+         */
+<span class="fc" id="L736">        NumberStrategy(final int field) {</span>
+<span class="fc" id="L737">             this.field= field;</span>
+<span class="fc" id="L738">        }</span>
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        boolean isNumber() {
+<span class="fc" id="L745">            return true;</span>
+        }
+
+        @Override
+        boolean parse(final FastDateParser parser, final Calendar calendar, final String source, final ParsePosition pos, final int maxWidth) {
+<span class="fc" id="L750">            int idx = pos.getIndex();</span>
+<span class="fc" id="L751">            int last = source.length();</span>
+
+<span class="fc bfc" id="L753" title="All 2 branches covered.">            if (maxWidth == 0) {</span>
+                // if no maxWidth, strip leading white space
+<span class="pc bpc" id="L755" title="1 of 2 branches missed.">                for (; idx &lt; last; ++idx) {</span>
+<span class="fc" id="L756">                    final char c = source.charAt(idx);</span>
+<span class="fc bfc" id="L757" title="All 2 branches covered.">                    if (!Character.isWhitespace(c)) {</span>
+<span class="fc" id="L758">                        break;</span>
+                    }
+                }
+<span class="fc" id="L761">                pos.setIndex(idx);</span>
+            } else {
+<span class="fc" id="L763">                final int end = idx + maxWidth;</span>
+<span class="fc bfc" id="L764" title="All 2 branches covered.">                if (last &gt; end) {</span>
+<span class="fc" id="L765">                    last = end;</span>
+                }
+            }
+
+<span class="fc bfc" id="L769" title="All 2 branches covered.">            for (; idx &lt; last; ++idx) {</span>
+<span class="fc" id="L770">                final char c = source.charAt(idx);</span>
+<span class="fc bfc" id="L771" title="All 2 branches covered.">                if (!Character.isDigit(c)) {</span>
+<span class="fc" id="L772">                    break;</span>
+                }
+            }
+
+<span class="fc bfc" id="L776" title="All 2 branches covered.">            if (pos.getIndex() == idx) {</span>
+<span class="fc" id="L777">                pos.setErrorIndex(idx);</span>
+<span class="fc" id="L778">                return false;</span>
+            }
+
+<span class="fc" id="L781">            final int value = Integer.parseInt(source.substring(pos.getIndex(), idx));</span>
+<span class="fc" id="L782">            pos.setIndex(idx);</span>
+
+<span class="fc" id="L784">            calendar.set(field, modify(parser, value));</span>
+<span class="fc" id="L785">            return true;</span>
+        }
+
+        /**
+         * Make any modifications to parsed integer
+         * @param parser The parser
+         * @param iValue The parsed integer
+         * @return The modified value
+         */
+        int modify(final FastDateParser parser, final int iValue) {
+<span class="fc" id="L795">            return iValue;</span>
+        }
+
+    }
+
+<span class="fc" id="L800">    private static final Strategy ABBREVIATED_YEAR_STRATEGY = new NumberStrategy(Calendar.YEAR) {</span>
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        int modify(final FastDateParser parser, final int iValue) {
+<span class="fc bfc" id="L806" title="All 2 branches covered.">            return iValue &lt; 100 ? parser.adjustYear(iValue) : iValue;</span>
+        }
+    };
+
+    /**
+     * A strategy that handles a timezone field in the parsing pattern
+     */
+    static class TimeZoneStrategy extends PatternStrategy {
+        private static final String RFC_822_TIME_ZONE = &quot;[+-]\\d{4}&quot;;
+        private static final String GMT_OPTION = TimeZones.GMT_ID + &quot;[+-]\\d{1,2}:\\d{2}&quot;;
+
+        private final Locale locale;
+<span class="fc" id="L818">        private final Map&lt;String, TzInfo&gt; tzNames= new HashMap&lt;&gt;();</span>
+
+        private static class TzInfo {
+            TimeZone zone;
+            int dstOffset;
+
+<span class="fc" id="L824">            TzInfo(final TimeZone tz, final boolean useDst) {</span>
+<span class="fc" id="L825">                zone = tz;</span>
+<span class="fc bfc" id="L826" title="All 2 branches covered.">                dstOffset = useDst ?tz.getDSTSavings() :0;</span>
+<span class="fc" id="L827">            }</span>
+        }
+
+        /**
+         * Index of zone id
+         */
+        private static final int ID = 0;
+
+        /**
+         * Constructs a Strategy that parses a TimeZone
+         * @param locale The Locale
+         */
+<span class="fc" id="L839">        TimeZoneStrategy(final Locale locale) {</span>
+<span class="fc" id="L840">            this.locale = locale;</span>
+
+<span class="fc" id="L842">            final StringBuilder sb = new StringBuilder();</span>
+<span class="fc" id="L843">            sb.append(&quot;((?iu)&quot; + RFC_822_TIME_ZONE + &quot;|&quot; + GMT_OPTION );</span>
+
+<span class="fc" id="L845">            final Set&lt;String&gt; sorted = new TreeSet&lt;&gt;(LONGER_FIRST_LOWERCASE);</span>
+
+<span class="fc" id="L847">            final String[][] zones = DateFormatSymbols.getInstance(locale).getZoneStrings();</span>
+<span class="fc bfc" id="L848" title="All 2 branches covered.">            for (final String[] zoneNames : zones) {</span>
+                // offset 0 is the time zone ID and is not localized
+<span class="fc" id="L850">                final String tzId = zoneNames[ID];</span>
+<span class="fc bfc" id="L851" title="All 2 branches covered.">                if (tzId.equalsIgnoreCase(TimeZones.GMT_ID)) {</span>
+<span class="fc" id="L852">                    continue;</span>
+                }
+<span class="fc" id="L854">                final TimeZone tz = TimeZone.getTimeZone(tzId);</span>
+                // offset 1 is long standard name
+                // offset 2 is short standard name
+<span class="fc" id="L857">                final TzInfo standard = new TzInfo(tz, false);</span>
+<span class="fc" id="L858">                TzInfo tzInfo = standard;</span>
+<span class="fc bfc" id="L859" title="All 2 branches covered.">                for (int i = 1; i &lt; zoneNames.length; ++i) {</span>
+<span class="fc bfc" id="L860" title="All 3 branches covered.">                    switch (i) {</span>
+                    case 3: // offset 3 is long daylight savings (or summertime) name
+                            // offset 4 is the short summertime name
+<span class="fc" id="L863">                        tzInfo = new TzInfo(tz, true);</span>
+<span class="fc" id="L864">                        break;</span>
+                    case 5: // offset 5 starts additional names, probably standard time
+<span class="fc" id="L866">                        tzInfo = standard;</span>
+<span class="fc" id="L867">                        break;</span>
+                    default:
+                        break;
+                    }
+<span class="pc bpc" id="L871" title="1 of 2 branches missed.">                    if (zoneNames[i] != null) {</span>
+<span class="fc" id="L872">                        final String key = zoneNames[i].toLowerCase(locale);</span>
+                        // ignore the data associated with duplicates supplied in
+                        // the additional names
+<span class="fc bfc" id="L875" title="All 2 branches covered.">                        if (sorted.add(key)) {</span>
+<span class="fc" id="L876">                            tzNames.put(key, tzInfo);</span>
+                        }
+                    }
+                }
+            }
+            // order the regex alternatives with longer strings first, greedy
+            // match will ensure longest string will be consumed
+<span class="fc bfc" id="L883" title="All 2 branches covered.">            for (final String zoneName : sorted) {</span>
+<span class="fc" id="L884">                simpleQuote(sb.append('|'), zoneName);</span>
+<span class="fc" id="L885">            }</span>
+<span class="fc" id="L886">            sb.append(&quot;)&quot;);</span>
+<span class="fc" id="L887">            createPattern(sb);</span>
+<span class="fc" id="L888">        }</span>
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        void setCalendar(final FastDateParser parser, final Calendar cal, final String timeZone) {
+<span class="fc" id="L895">            final TimeZone tz = FastTimeZone.getGmtTimeZone(timeZone);</span>
+<span class="fc bfc" id="L896" title="All 2 branches covered.">            if (tz != null) {</span>
+<span class="fc" id="L897">                cal.setTimeZone(tz);</span>
+            } else {
+<span class="fc" id="L899">                final String lowerCase = timeZone.toLowerCase(locale);</span>
+<span class="fc" id="L900">                TzInfo tzInfo = tzNames.get(lowerCase);</span>
+<span class="pc bpc" id="L901" title="1 of 2 branches missed.">                if (tzInfo == null) {</span>
+                    // match missing the optional trailing period
+<span class="nc" id="L903">                    tzInfo = tzNames.get(lowerCase + '.');</span>
+                }
+<span class="fc" id="L905">                cal.set(Calendar.DST_OFFSET, tzInfo.dstOffset);</span>
+<span class="fc" id="L906">                cal.set(Calendar.ZONE_OFFSET, tzInfo.zone.getRawOffset());</span>
+            }
+<span class="fc" id="L908">        }</span>
+    }
+
+    private static class ISO8601TimeZoneStrategy extends PatternStrategy {
+        // Z, +hh, -hh, +hhmm, -hhmm, +hh:mm or -hh:mm
+
+        /**
+         * Constructs a Strategy that parses a TimeZone
+         * @param pattern The Pattern
+         */
+<span class="fc" id="L918">        ISO8601TimeZoneStrategy(final String pattern) {</span>
+<span class="fc" id="L919">            createPattern(pattern);</span>
+<span class="fc" id="L920">        }</span>
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        void setCalendar(final FastDateParser parser, final Calendar cal, final String value) {
+<span class="fc" id="L927">            cal.setTimeZone(FastTimeZone.getGmtTimeZone(value));</span>
+<span class="fc" id="L928">        }</span>
+
+<span class="fc" id="L930">        private static final Strategy ISO_8601_1_STRATEGY = new ISO8601TimeZoneStrategy(&quot;(Z|(?:[+-]\\d{2}))&quot;);</span>
+<span class="fc" id="L931">        private static final Strategy ISO_8601_2_STRATEGY = new ISO8601TimeZoneStrategy(&quot;(Z|(?:[+-]\\d{2}\\d{2}))&quot;);</span>
+<span class="fc" id="L932">        private static final Strategy ISO_8601_3_STRATEGY = new ISO8601TimeZoneStrategy(&quot;(Z|(?:[+-]\\d{2}(?::)\\d{2}))&quot;);</span>
+
+        /**
+         * Factory method for ISO8601TimeZoneStrategies.
+         *
+         * @param tokenLen a token indicating the length of the TimeZone String to be formatted.
+         * @return a ISO8601TimeZoneStrategy that can format TimeZone String of length {@code tokenLen}. If no such
+         *          strategy exists, an IllegalArgumentException will be thrown.
+         */
+        static Strategy getStrategy(final int tokenLen) {
+<span class="fc bfc" id="L942" title="All 4 branches covered.">            switch(tokenLen) {</span>
+            case 1:
+<span class="fc" id="L944">                return ISO_8601_1_STRATEGY;</span>
+            case 2:
+<span class="fc" id="L946">                return ISO_8601_2_STRATEGY;</span>
+            case 3:
+<span class="fc" id="L948">                return ISO_8601_3_STRATEGY;</span>
+            default:
+<span class="fc" id="L950">                throw new IllegalArgumentException(&quot;invalid number of X&quot;);</span>
+            }
+        }
+    }
+
+<span class="fc" id="L955">    private static final Strategy NUMBER_MONTH_STRATEGY = new NumberStrategy(Calendar.MONTH) {</span>
+        @Override
+        int modify(final FastDateParser parser, final int iValue) {
+<span class="fc" id="L958">            return iValue-1;</span>
+        }
+    };
+
+<span class="fc" id="L962">    private static final Strategy LITERAL_YEAR_STRATEGY = new NumberStrategy(Calendar.YEAR);</span>
+<span class="fc" id="L963">    private static final Strategy WEEK_OF_YEAR_STRATEGY = new NumberStrategy(Calendar.WEEK_OF_YEAR);</span>
+<span class="fc" id="L964">    private static final Strategy WEEK_OF_MONTH_STRATEGY = new NumberStrategy(Calendar.WEEK_OF_MONTH);</span>
+<span class="fc" id="L965">    private static final Strategy DAY_OF_YEAR_STRATEGY = new NumberStrategy(Calendar.DAY_OF_YEAR);</span>
+<span class="fc" id="L966">    private static final Strategy DAY_OF_MONTH_STRATEGY = new NumberStrategy(Calendar.DAY_OF_MONTH);</span>
+<span class="fc" id="L967">    private static final Strategy DAY_OF_WEEK_STRATEGY = new NumberStrategy(Calendar.DAY_OF_WEEK) {</span>
+        @Override
+        int modify(final FastDateParser parser, final int iValue) {
+<span class="fc bfc" id="L970" title="All 2 branches covered.">            return iValue == 7 ? Calendar.SUNDAY : iValue + 1;</span>
+        }
+    };
+
+<span class="fc" id="L974">    private static final Strategy DAY_OF_WEEK_IN_MONTH_STRATEGY = new NumberStrategy(Calendar.DAY_OF_WEEK_IN_MONTH);</span>
+<span class="fc" id="L975">    private static final Strategy HOUR_OF_DAY_STRATEGY = new NumberStrategy(Calendar.HOUR_OF_DAY);</span>
+<span class="fc" id="L976">    private static final Strategy HOUR24_OF_DAY_STRATEGY = new NumberStrategy(Calendar.HOUR_OF_DAY) {</span>
+        @Override
+        int modify(final FastDateParser parser, final int iValue) {
+<span class="fc bfc" id="L979" title="All 2 branches covered.">            return iValue == 24 ? 0 : iValue;</span>
+        }
+    };
+
+<span class="fc" id="L983">    private static final Strategy HOUR12_STRATEGY = new NumberStrategy(Calendar.HOUR) {</span>
+        @Override
+        int modify(final FastDateParser parser, final int iValue) {
+<span class="fc bfc" id="L986" title="All 2 branches covered.">            return iValue == 12 ? 0 : iValue;</span>
+        }
+    };
+
+<span class="fc" id="L990">    private static final Strategy HOUR_STRATEGY = new NumberStrategy(Calendar.HOUR);</span>
+<span class="fc" id="L991">    private static final Strategy MINUTE_STRATEGY = new NumberStrategy(Calendar.MINUTE);</span>
+<span class="fc" id="L992">    private static final Strategy SECOND_STRATEGY = new NumberStrategy(Calendar.SECOND);</span>
+<span class="fc" id="L993">    private static final Strategy MILLISECOND_STRATEGY = new NumberStrategy(Calendar.MILLISECOND);</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.3.201901230119</span></div></body></html>

@@ -1,0 +1,46 @@
+http://cloc.sourceforge.net v 1.64  T=14.51 s (0.1 files/s, 0.1 lines/s)
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+HTML
+ same                            0              0              0              0
+ modified                        0              0              0              0
+ added                           3             33             42             91
+ removed                         3             33             42             91
+Ant
+ same                            0              0              0              0
+ modified                        0              0              0              0
+ added                           0              0              0              0
+ removed                         7            250            233            550
+Java
+ same                            0              0           2460           2155
+ modified                       84              0            302           3650
+ added                         217           3494          12541          13719
+ removed                       161           4096          11559           9208
+Maven
+ same                            0              0              0              0
+ modified                        0              0              0              0
+ added                          11             47            167            760
+ removed                         1             20             23            276
+DTD
+ same                            0              0              0              0
+ modified                        0              0              0              0
+ added                           3             63            212            172
+ removed                         3             65            215            162
+XML
+ same                            0              0              0              0
+ modified                        0              0              0              0
+ added                          75            603           1177           3924
+ removed                        68            563           1076           3467
+XSD
+ same                            0              0              0              0
+ modified                        0              0              0              0
+ added                           1              7             14             25
+ removed                         1             12             14             27
+-------------------------------------------------------------------------------
+SUM:
+ same                            0              0           2460           2155
+ modified                       84              0            302           3650
+ added                         310           4247          14153          18691
+ removed                       244           5039          13162          13781
+-------------------------------------------------------------------------------

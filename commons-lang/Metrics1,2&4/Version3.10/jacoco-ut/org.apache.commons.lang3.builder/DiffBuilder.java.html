@@ -1,0 +1,985 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DiffBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons Lang</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.lang3.builder</a> &gt; <span class="el_source">DiffBuilder.java</span></div><h1>DiffBuilder.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.lang3.builder;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.Validate;
+
+/**
+ * &lt;p&gt;
+ * Assists in implementing {@link Diffable#diff(Object)} methods.
+ * &lt;/p&gt;
+ *
+ * &lt;p&gt;
+ * To use this class, write code as follows:
+ * &lt;/p&gt;
+ *
+ * &lt;pre&gt;
+ * public class Person implements Diffable&amp;lt;Person&amp;gt; {
+ *   String name;
+ *   int age;
+ *   boolean smoker;
+ *
+ *   ...
+ *
+ *   public DiffResult diff(Person obj) {
+ *     // No need for null check, as NullPointerException correct if obj is null
+ *     return new DiffBuilder(this, obj, ToStringStyle.SHORT_PREFIX_STYLE)
+ *       .append(&quot;name&quot;, this.name, obj.name)
+ *       .append(&quot;age&quot;, this.age, obj.age)
+ *       .append(&quot;smoker&quot;, this.smoker, obj.smoker)
+ *       .build();
+ *   }
+ * }
+ * &lt;/pre&gt;
+ *
+ * &lt;p&gt;
+ * The {@code ToStringStyle} passed to the constructor is embedded in the
+ * returned {@code DiffResult} and influences the style of the
+ * {@code DiffResult.toString()} method. This style choice can be overridden by
+ * calling {@link DiffResult#toString(ToStringStyle)}.
+ * &lt;/p&gt;
+ *
+ * @param &lt;T&gt; type of the left and right object.
+ * @see Diffable
+ * @see Diff
+ * @see DiffResult
+ * @see ToStringStyle
+ * @since 3.3
+ */
+public class DiffBuilder&lt;T&gt; implements Builder&lt;DiffResult&lt;T&gt;&gt; {
+
+    private final List&lt;Diff&lt;?&gt;&gt; diffs;
+    private final boolean objectsTriviallyEqual;
+    private final T left;
+    private final T right;
+    private final ToStringStyle style;
+
+    /**
+     * &lt;p&gt;
+     * Constructs a builder for the specified objects with the specified style.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * If {@code lhs == rhs} or {@code lhs.equals(rhs)} then the builder will
+     * not evaluate any calls to {@code append(...)} and will return an empty
+     * {@link DiffResult} when {@link #build()} is executed.
+     * &lt;/p&gt;
+     *
+     * @param lhs
+     *            {@code this} object
+     * @param rhs
+     *            the object to diff against
+     * @param style
+     *            the style will use when outputting the objects, {@code null}
+     *            uses the default
+     * @param testTriviallyEqual
+     *            If true, this will test if lhs and rhs are the same or equal.
+     *            All of the append(fieldName, lhs, rhs) methods will abort
+     *            without creating a field {@link Diff} if the trivially equal
+     *            test is enabled and returns true.  The result of this test
+     *            is never changed throughout the life of this {@link DiffBuilder}.
+     * @throws IllegalArgumentException
+     *             if {@code lhs} or {@code rhs} is {@code null}
+     * @since 3.4
+     */
+    public DiffBuilder(final T lhs, final T rhs,
+<span class="fc" id="L105">            final ToStringStyle style, final boolean testTriviallyEqual) {</span>
+
+<span class="fc" id="L107">        Validate.notNull(lhs, &quot;lhs cannot be null&quot;);</span>
+<span class="fc" id="L108">        Validate.notNull(rhs, &quot;rhs cannot be null&quot;);</span>
+
+<span class="fc" id="L110">        this.diffs = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L111">        this.left = lhs;</span>
+<span class="fc" id="L112">        this.right = rhs;</span>
+<span class="fc" id="L113">        this.style = style;</span>
+
+        // Don't compare any fields if objects equal
+<span class="fc bfc" id="L116" title="All 6 branches covered.">        this.objectsTriviallyEqual = testTriviallyEqual &amp;&amp; (lhs == rhs || lhs.equals(rhs));</span>
+<span class="fc" id="L117">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Constructs a builder for the specified objects with the specified style.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * If {@code lhs == rhs} or {@code lhs.equals(rhs)} then the builder will
+     * not evaluate any calls to {@code append(...)} and will return an empty
+     * {@link DiffResult} when {@link #build()} is executed.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * This delegates to {@link #DiffBuilder(Object, Object, ToStringStyle, boolean)}
+     * with the testTriviallyEqual flag enabled.
+     * &lt;/p&gt;
+     *
+     * @param lhs
+     *            {@code this} object
+     * @param rhs
+     *            the object to diff against
+     * @param style
+     *            the style will use when outputting the objects, {@code null}
+     *            uses the default
+     * @throws IllegalArgumentException
+     *             if {@code lhs} or {@code rhs} is {@code null}
+     */
+    public DiffBuilder(final T lhs, final T rhs,
+            final ToStringStyle style) {
+
+<span class="fc" id="L148">            this(lhs, rhs, style, true);</span>
+<span class="fc" id="L149">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code boolean}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code boolean}
+     * @param rhs
+     *            the right hand {@code boolean}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final boolean lhs,
+            final boolean rhs) {
+<span class="fc" id="L168">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L170" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L171">            return this;</span>
+        }
+<span class="fc bfc" id="L173" title="All 2 branches covered.">        if (lhs != rhs) {</span>
+<span class="fc" id="L174">            diffs.add(new Diff&lt;Boolean&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Boolean getLeft() {
+<span class="fc" id="L179">                    return Boolean.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Boolean getRight() {
+<span class="fc" id="L184">                    return Boolean.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L188">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code boolean[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code boolean[]}
+     * @param rhs
+     *            the right hand {@code boolean[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final boolean[] lhs,
+            final boolean[] rhs) {
+<span class="fc" id="L208">        validateFieldNameNotNull(fieldName);</span>
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L210">            return this;</span>
+        }
+<span class="fc bfc" id="L212" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L213">            diffs.add(new Diff&lt;Boolean[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Boolean[] getLeft() {
+<span class="fc" id="L218">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Boolean[] getRight() {
+<span class="fc" id="L223">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L227">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code byte}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code byte}
+     * @param rhs
+     *            the right hand {@code byte}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final byte lhs,
+            final byte rhs) {
+<span class="fc" id="L247">        validateFieldNameNotNull(fieldName);</span>
+<span class="fc bfc" id="L248" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L249">            return this;</span>
+        }
+<span class="fc bfc" id="L251" title="All 2 branches covered.">        if (lhs != rhs) {</span>
+<span class="fc" id="L252">            diffs.add(new Diff&lt;Byte&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Byte getLeft() {
+<span class="fc" id="L257">                    return Byte.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Byte getRight() {
+<span class="fc" id="L262">                    return Byte.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L266">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code byte[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code byte[]}
+     * @param rhs
+     *            the right hand {@code byte[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final byte[] lhs,
+            final byte[] rhs) {
+<span class="fc" id="L286">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L288" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L289">            return this;</span>
+        }
+<span class="fc bfc" id="L291" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L292">            diffs.add(new Diff&lt;Byte[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Byte[] getLeft() {
+<span class="fc" id="L297">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Byte[] getRight() {
+<span class="fc" id="L302">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L306">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code char}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code char}
+     * @param rhs
+     *            the right hand {@code char}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final char lhs,
+            final char rhs) {
+<span class="fc" id="L326">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L328" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L329">            return this;</span>
+        }
+<span class="fc bfc" id="L331" title="All 2 branches covered.">        if (lhs != rhs) {</span>
+<span class="fc" id="L332">            diffs.add(new Diff&lt;Character&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Character getLeft() {
+<span class="fc" id="L337">                    return Character.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Character getRight() {
+<span class="fc" id="L342">                    return Character.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L346">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code char[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code char[]}
+     * @param rhs
+     *            the right hand {@code char[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final char[] lhs,
+            final char[] rhs) {
+<span class="fc" id="L366">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L368" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L369">            return this;</span>
+        }
+<span class="fc bfc" id="L371" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L372">            diffs.add(new Diff&lt;Character[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Character[] getLeft() {
+<span class="fc" id="L377">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Character[] getRight() {
+<span class="fc" id="L382">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L386">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code double}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code double}
+     * @param rhs
+     *            the right hand {@code double}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final double lhs,
+            final double rhs) {
+<span class="fc" id="L406">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L408" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L409">            return this;</span>
+        }
+<span class="fc bfc" id="L411" title="All 2 branches covered.">        if (Double.doubleToLongBits(lhs) != Double.doubleToLongBits(rhs)) {</span>
+<span class="fc" id="L412">            diffs.add(new Diff&lt;Double&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Double getLeft() {
+<span class="fc" id="L417">                    return Double.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Double getRight() {
+<span class="fc" id="L422">                    return Double.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L426">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code double[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code double[]}
+     * @param rhs
+     *            the right hand {@code double[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final double[] lhs,
+            final double[] rhs) {
+<span class="fc" id="L446">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L448" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L449">            return this;</span>
+        }
+<span class="fc bfc" id="L451" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L452">            diffs.add(new Diff&lt;Double[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Double[] getLeft() {
+<span class="fc" id="L457">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Double[] getRight() {
+<span class="fc" id="L462">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L466">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code float}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code float}
+     * @param rhs
+     *            the right hand {@code float}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final float lhs,
+            final float rhs) {
+<span class="fc" id="L486">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L488" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L489">            return this;</span>
+        }
+<span class="fc bfc" id="L491" title="All 2 branches covered.">        if (Float.floatToIntBits(lhs) != Float.floatToIntBits(rhs)) {</span>
+<span class="fc" id="L492">            diffs.add(new Diff&lt;Float&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Float getLeft() {
+<span class="fc" id="L497">                    return Float.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Float getRight() {
+<span class="fc" id="L502">                    return Float.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L506">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code float[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code float[]}
+     * @param rhs
+     *            the right hand {@code float[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final float[] lhs,
+            final float[] rhs) {
+<span class="fc" id="L526">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L528" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L529">            return this;</span>
+        }
+<span class="fc bfc" id="L531" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L532">            diffs.add(new Diff&lt;Float[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Float[] getLeft() {
+<span class="fc" id="L537">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Float[] getRight() {
+<span class="fc" id="L542">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L546">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code int}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code int}
+     * @param rhs
+     *            the right hand {@code int}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final int lhs,
+            final int rhs) {
+<span class="fc" id="L566">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L568" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L569">            return this;</span>
+        }
+<span class="fc bfc" id="L571" title="All 2 branches covered.">        if (lhs != rhs) {</span>
+<span class="fc" id="L572">            diffs.add(new Diff&lt;Integer&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Integer getLeft() {
+<span class="fc" id="L577">                    return Integer.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Integer getRight() {
+<span class="fc" id="L582">                    return Integer.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L586">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code int[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code int[]}
+     * @param rhs
+     *            the right hand {@code int[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final int[] lhs,
+            final int[] rhs) {
+<span class="fc" id="L606">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L608" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L609">            return this;</span>
+        }
+<span class="fc bfc" id="L611" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L612">            diffs.add(new Diff&lt;Integer[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Integer[] getLeft() {
+<span class="fc" id="L617">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Integer[] getRight() {
+<span class="fc" id="L622">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L626">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code long}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code long}
+     * @param rhs
+     *            the right hand {@code long}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final long lhs,
+            final long rhs) {
+<span class="fc" id="L646">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L648" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L649">            return this;</span>
+        }
+<span class="fc bfc" id="L651" title="All 2 branches covered.">        if (lhs != rhs) {</span>
+<span class="fc" id="L652">            diffs.add(new Diff&lt;Long&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Long getLeft() {
+<span class="fc" id="L657">                    return Long.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Long getRight() {
+<span class="fc" id="L662">                    return Long.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L666">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code long[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code long[]}
+     * @param rhs
+     *            the right hand {@code long[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final long[] lhs,
+            final long[] rhs) {
+<span class="fc" id="L686">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L688" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L689">            return this;</span>
+        }
+<span class="fc bfc" id="L691" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L692">            diffs.add(new Diff&lt;Long[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Long[] getLeft() {
+<span class="fc" id="L697">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Long[] getRight() {
+<span class="fc" id="L702">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L706">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code short}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code short}
+     * @param rhs
+     *            the right hand {@code short}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final short lhs,
+            final short rhs) {
+<span class="fc" id="L726">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L728" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L729">            return this;</span>
+        }
+<span class="fc bfc" id="L731" title="All 2 branches covered.">        if (lhs != rhs) {</span>
+<span class="fc" id="L732">            diffs.add(new Diff&lt;Short&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Short getLeft() {
+<span class="fc" id="L737">                    return Short.valueOf(lhs);</span>
+                }
+
+                @Override
+                public Short getRight() {
+<span class="fc" id="L742">                    return Short.valueOf(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L746">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code short[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code short[]}
+     * @param rhs
+     *            the right hand {@code short[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final short[] lhs,
+            final short[] rhs) {
+<span class="fc" id="L766">        validateFieldNameNotNull(fieldName);</span>
+
+<span class="fc bfc" id="L768" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L769">            return this;</span>
+        }
+<span class="fc bfc" id="L771" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L772">            diffs.add(new Diff&lt;Short[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Short[] getLeft() {
+<span class="fc" id="L777">                    return ArrayUtils.toObject(lhs);</span>
+                }
+
+                @Override
+                public Short[] getRight() {
+<span class="fc" id="L782">                    return ArrayUtils.toObject(rhs);</span>
+                }
+            });
+        }
+<span class="fc" id="L786">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code Objects}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code Object}
+     * @param rhs
+     *            the right hand {@code Object}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final Object lhs,
+            final Object rhs) {
+<span class="fc" id="L806">        validateFieldNameNotNull(fieldName);</span>
+<span class="fc bfc" id="L807" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L808">            return this;</span>
+        }
+<span class="fc bfc" id="L810" title="All 2 branches covered.">        if (lhs == rhs) {</span>
+<span class="fc" id="L811">            return this;</span>
+        }
+
+        Object objectToTest;
+<span class="fc bfc" id="L815" title="All 2 branches covered.">        if (lhs != null) {</span>
+<span class="fc" id="L816">            objectToTest = lhs;</span>
+        } else {
+            // rhs cannot be null, as lhs != rhs
+<span class="fc" id="L819">            objectToTest = rhs;</span>
+        }
+
+<span class="fc bfc" id="L822" title="All 2 branches covered.">        if (objectToTest.getClass().isArray()) {</span>
+<span class="fc bfc" id="L823" title="All 2 branches covered.">            if (objectToTest instanceof boolean[]) {</span>
+<span class="fc" id="L824">                return append(fieldName, (boolean[]) lhs, (boolean[]) rhs);</span>
+            }
+<span class="fc bfc" id="L826" title="All 2 branches covered.">            if (objectToTest instanceof byte[]) {</span>
+<span class="fc" id="L827">                return append(fieldName, (byte[]) lhs, (byte[]) rhs);</span>
+            }
+<span class="fc bfc" id="L829" title="All 2 branches covered.">            if (objectToTest instanceof char[]) {</span>
+<span class="fc" id="L830">                return append(fieldName, (char[]) lhs, (char[]) rhs);</span>
+            }
+<span class="fc bfc" id="L832" title="All 2 branches covered.">            if (objectToTest instanceof double[]) {</span>
+<span class="fc" id="L833">                return append(fieldName, (double[]) lhs, (double[]) rhs);</span>
+            }
+<span class="fc bfc" id="L835" title="All 2 branches covered.">            if (objectToTest instanceof float[]) {</span>
+<span class="fc" id="L836">                return append(fieldName, (float[]) lhs, (float[]) rhs);</span>
+            }
+<span class="fc bfc" id="L838" title="All 2 branches covered.">            if (objectToTest instanceof int[]) {</span>
+<span class="fc" id="L839">                return append(fieldName, (int[]) lhs, (int[]) rhs);</span>
+            }
+<span class="fc bfc" id="L841" title="All 2 branches covered.">            if (objectToTest instanceof long[]) {</span>
+<span class="fc" id="L842">                return append(fieldName, (long[]) lhs, (long[]) rhs);</span>
+            }
+<span class="fc bfc" id="L844" title="All 2 branches covered.">            if (objectToTest instanceof short[]) {</span>
+<span class="fc" id="L845">                return append(fieldName, (short[]) lhs, (short[]) rhs);</span>
+            }
+
+<span class="fc" id="L848">            return append(fieldName, (Object[]) lhs, (Object[]) rhs);</span>
+        }
+
+        // Not array type
+<span class="fc bfc" id="L852" title="All 4 branches covered.">        if (lhs != null &amp;&amp; lhs.equals(rhs)) {</span>
+<span class="fc" id="L853">            return this;</span>
+        }
+
+<span class="fc" id="L856">        diffs.add(new Diff&lt;Object&gt;(fieldName) {</span>
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object getLeft() {
+<span class="fc" id="L861">                return lhs;</span>
+            }
+
+            @Override
+            public Object getRight() {
+<span class="fc" id="L866">                return rhs;</span>
+            }
+        });
+
+<span class="fc" id="L870">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Test if two {@code Object[]}s are equal.
+     * &lt;/p&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param lhs
+     *            the left hand {@code Object[]}
+     * @param rhs
+     *            the right hand {@code Object[]}
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName, final Object[] lhs,
+            final Object[] rhs) {
+<span class="fc" id="L890">        validateFieldNameNotNull(fieldName);</span>
+<span class="fc bfc" id="L891" title="All 2 branches covered.">        if (objectsTriviallyEqual) {</span>
+<span class="fc" id="L892">            return this;</span>
+        }
+
+<span class="fc bfc" id="L895" title="All 2 branches covered.">        if (!Arrays.equals(lhs, rhs)) {</span>
+<span class="fc" id="L896">            diffs.add(new Diff&lt;Object[]&gt;(fieldName) {</span>
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Object[] getLeft() {
+<span class="fc" id="L901">                    return lhs;</span>
+                }
+
+                @Override
+                public Object[] getRight() {
+<span class="fc" id="L906">                    return rhs;</span>
+                }
+            });
+        }
+
+<span class="fc" id="L911">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Append diffs from another {@code DiffResult}.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * This method is useful if you want to compare properties which are
+     * themselves Diffable and would like to know which specific part of
+     * it is different.
+     * &lt;/p&gt;
+     *
+     * &lt;pre&gt;
+     * public class Person implements Diffable&amp;lt;Person&amp;gt; {
+     *   String name;
+     *   Address address; // implements Diffable&amp;lt;Address&amp;gt;
+     *
+     *   ...
+     *
+     *   public DiffResult diff(Person obj) {
+     *     return new DiffBuilder(this, obj, ToStringStyle.SHORT_PREFIX_STYLE)
+     *       .append(&quot;name&quot;, this.name, obj.name)
+     *       .append(&quot;address&quot;, this.address.diff(obj.address))
+     *       .build();
+     *   }
+     * }
+     * &lt;/pre&gt;
+     *
+     * @param fieldName
+     *            the field name
+     * @param diffResult
+     *            the {@code DiffResult} to append
+     * @return this
+     * @throws IllegalArgumentException
+     *             if field name is {@code null}
+     * @since 3.5
+     */
+    public DiffBuilder&lt;T&gt; append(final String fieldName,
+            final DiffResult&lt;T&gt; diffResult) {
+<span class="fc" id="L952">        validateFieldNameNotNull(fieldName);</span>
+<span class="fc" id="L953">        Validate.notNull(diffResult, &quot;Diff result cannot be null&quot;);</span>
+<span class="pc bpc" id="L954" title="1 of 2 branches missed.">        if (objectsTriviallyEqual) {</span>
+<span class="nc" id="L955">            return this;</span>
+        }
+
+<span class="fc bfc" id="L958" title="All 2 branches covered.">        for (final Diff&lt;?&gt; diff : diffResult.getDiffs()) {</span>
+<span class="fc" id="L959">            append(fieldName + &quot;.&quot; + diff.getFieldName(),</span>
+<span class="fc" id="L960">                   diff.getLeft(), diff.getRight());</span>
+<span class="fc" id="L961">        }</span>
+
+<span class="fc" id="L963">        return this;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Builds a {@link DiffResult} based on the differences appended to this
+     * builder.
+     * &lt;/p&gt;
+     *
+     * @return a {@code DiffResult} containing the differences between the two
+     *         objects.
+     */
+    @Override
+    public DiffResult&lt;T&gt; build() {
+<span class="fc" id="L977">        return new DiffResult&lt;&gt;(left, right, diffs, style);</span>
+    }
+
+    private void validateFieldNameNotNull(final String fieldName) {
+<span class="fc" id="L981">        Validate.notNull(fieldName, &quot;Field name cannot be null&quot;);</span>
+<span class="fc" id="L982">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.3.201901230119</span></div></body></html>
