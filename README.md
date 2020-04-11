@@ -1,7 +1,7 @@
 # SOEN6611MeasurementProject
 
 # Project Structure  
-The main folder is called Project, which contains five folders:    
+The main folder contains five folders:    
 * CommonCollections.    
 * Common Configuration.  
 * CommonDigester. 
