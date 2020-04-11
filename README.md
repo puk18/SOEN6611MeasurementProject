@@ -1,6 +1,6 @@
 # SOEN6611MeasurementProject
 
-#Project Structure  
+##Project Structure  
 The main folder is called Project, which contains five folders:    
 * CommonCollections.    
 * Common Configuration.  
@@ -14,7 +14,7 @@ Each Folders of project contains 'Metric 1,2,4', Metric3, Metric5, Metric6 resul
 Each folder also contains Correlation.csv which are the results of correlation between different metrics respectively
     
     
-Requirements for running the Scripts and tools 
+##Requirements for running the Scripts and tools 
 
 1. Jacoco Maven Plugin:-  
    * This Plugin is used to collect data for Metric 1,2 and 4.
@@ -29,7 +29,7 @@ Requirements for running the Scripts and tools
       2. Run Maven Clean Goal and test goal.
   
     We get the reports in a Pit-test reports folder after successfully running pit-test plugin.  
-    The output is in the form of index.html format for desired result 
+    The output is in the form of index.html format which is converted into csv format using webscrapping
 
 3. Code Churn  
   Download and install cloc  
@@ -50,9 +50,7 @@ Requirements for running the Scripts and tools
   The code smell value can then be used for further correlation.
 
 
-After running each above given tools we will have metrics for each project.After this first extract the mutation score details from index.html file from metrics3 using Scrapper.java to need to run this file in java environment,here all we need to do is just supply the filepath of index.html it will generate the .csv file in the same directory of the file path supplied
-
-Thus after generating the pit file we need run the python script i.e ClassLevelCorrelation.py this will prompt the user to enter the two file paths where first file path would be the jacoco.csv file path in metrics 1,2&4 folder and second file path would have file path of pit.csv in metrics3 folder and after runnning the script there would be correlation.csv generated in the project folder.
+We need run the python script i.e ClassLevelCorrelation.py to find class level correlation,this will prompt the user to enter the two file paths where first file path would be the jacoco.csv file path in metrics 1,2&4 folder and second file path would have file path of pit.csv in metrics3 folder and after runnning the script there would be correlation.csv generated in the project folder.
 
 For finding the version level correlation we use python script i.e metrics5&6.py, After running the script,it prompts the user to enter the two file paths where first file path would be the 1,2&6.csv file path in project folder and second file path would have file path of 5&6.csv  this will compute the correlation results and would append them in correlation.csv file
 
