@@ -20,6 +20,13 @@ Each folder also contains Correlation.csv which are the results of correlation b
    * This Plugin is used to collect data for Metric 1,2 and 4.
    * Steps for generating metrics:-  
       1. Insert the plugin in pom.xml
+      ```
+      <plugin>
+      <groupId>org.jacoco</groupId>
+      <artifactId>jacoco-maven-plugin</artifactId>
+      <version>0.8.6-SNAPSHOT</version>
+      </plugin>
+      ```
       2. Run Maven Clean Goal and test goal.
    * We get the reports in jacoco-ut folder which is currently present in the above folder structure in each project/version sub-folders
 
