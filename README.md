@@ -32,19 +32,19 @@ Each folder also contains Correlation.csv which are the results of correlation b
     * The output is in the form of index.html format which is converted into csv format
     
 3. Code Churn 
-  * Download and install cloc  
-  * Command used : cloc --diff “version1Code” “Version2Code” --out=version.csv    
-  * This creates a file .csv files that contains details of changes made between two versions of project
-  * Code churn =linesadded+modified+removed
+   *  Download and install cloc  
+   * Command used : cloc --diff “version1Code” “Version2Code” --out=version.csv    
+   * This creates a file .csv files that contains details of changes made between two versions of project
+   * Code churn =linesadded+modified+removed
 
 
 4. SonarQube/SonarLint
- * Steps for generating metrics:-  
+   * Steps for generating metrics:-  
       1. Insert the plugin in pom.xml
       2. Run Maven Clean Goal and test goal with goal clean install sonar:sonar -Dsonar.host.url=http://localhost:9000
   
-  * The results can then be seen at localhost:9000
-  * The code smell value can then be used for further correlation.
+   * The results can then be seen at localhost:9000
+   * The code smell value can then be used for further correlation.
 
 
 We need to run the python script i.e ClassLevelCorrelation.py to find class level correlation,this will prompt the user to enter the two file paths where first file path would be the jacoco.csv file path in metrics 1,2&4 folder and second file path would have file path of pit.csv in metrics3 folder and after runnning the script there would be correlation.csv generated in the project folder.
