@@ -37,14 +37,14 @@ Each folder also contains Correlation.csv which are the results of correlation b
   Command used :  
     cloc --diff “version1Code” “Version2Code” --out=version.csv  
     
-  * This creates a file .csv files that contains the count of files ,blank lines, commented lines and lines of code that are same, added , modified and removed between two versions of projects
+  * This creates a file .csv files that contains details of changes made between two versions of project
   * Code churn =linesadded+modified+removed
 
 
 4. SonarQube/SonarLint
  * Steps for generating metrics:-  
       1. Insert the plugin in pom.xml
-      2. Run Maven Clean Goal and test goal with goal  “mvn sonar: sonar Dsonar.projectKey=”KeyValue”Dsonar.host.url=http://localhost:9000 Dsonar.login=admin Dsonar.password=admin”.
+      2. Run Maven Clean Goal and test goal with goal clean install sonar:sonar -Dsonar.host.url=http://localhost:9000
   
   * The results can then be seen at localhost:9000
   * The code smell value can then be used for further correlation.
