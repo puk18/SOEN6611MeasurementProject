@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
-file1=input("first file")
-file2=input("Second file")
+file1=input("Enter file path for jacoco.csv")
+file2=input("Enter file path for extractedpit.csv")
 
 
 path, filename = os.path.split(file1)
