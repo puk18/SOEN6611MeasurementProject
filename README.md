@@ -1,7 +1,7 @@
 # SOEN6611MeasurementProject
 
 # Project Structure  
-The main folder contains five folders:    
+The main folder contains four folders and two scripts:    
 * CommonCollections.    
 * Common Configuration.  
 * CommonDigester. 
@@ -10,7 +10,7 @@ The main folder contains five folders:
 * ClassLevelCorrelation.py 
 
    
-Each Folders of project contains 'Metric 1,2,4', Metric3, Metric5, Metric6 results obtained from various tools.Where in Metric3  contains metrics for only one version where as rest all the folder contains metrics for 5 versions of each project 
+Each Folders of project contains 'Metric 1,2,4', Metric3, Metric5, Metric6 results obtained from various tools.Where in Metric3 contains metrics for only one version where as rest all the folder contains metrics for 5 versions of each project 
 Each folder also contains Correlation.csv which are the results of correlation between different metrics respectively
     
     
@@ -29,14 +29,11 @@ Each folder also contains Correlation.csv which are the results of correlation b
       2. Run Maven Clean Goal and test goal.
   
     * We get the reports in a Pit-test reports folder after successfully running pit-test plugin.  
-    * The output is in the form of index.html format which is converted into csv format using webscrapping
-
-3. Code Churn  
-  Download and install cloc  
-  
-  Command used :  
-    cloc --diff “version1Code” “Version2Code” --out=version.csv  
+    * The output is in the form of index.html format which is converted into csv format
     
+3. Code Churn 
+  * Download and install cloc  
+  * Command used : cloc --diff “version1Code” “Version2Code” --out=version.csv    
   * This creates a file .csv files that contains details of changes made between two versions of project
   * Code churn =linesadded+modified+removed
 
@@ -52,7 +49,7 @@ Each folder also contains Correlation.csv which are the results of correlation b
 
 We need to run the python script i.e ClassLevelCorrelation.py to find class level correlation,this will prompt the user to enter the two file paths where first file path would be the jacoco.csv file path in metrics 1,2&4 folder and second file path would have file path of pit.csv in metrics3 folder and after runnning the script there would be correlation.csv generated in the project folder.
 
-For finding the version level correlation we use python script i.e metrics5&6.py, After running the script,it prompts the user to enter the two file paths where first file path would be the 1,2&6.csv file path in project folder and second file path would have file path of 5&6.csv  this will compute the correlation results and would append them in correlation.csv file
+For finding the version level correlation we use python script i.e metrics5&6.py, After running the script,it prompts the user to enter the two file paths where first file path would be the 1,2&6.csv file path in project folder and second file path would have file path of 5&6.csv  this will compute the correlation results and would append them in correlation.csv file generated previously
 
 Thus we would have all the correlation results in correlation.csv file
 
