@@ -26,6 +26,13 @@ Each folder also contains Correlation.csv which are the results of correlation b
 2. PiTest Plugin
     * Steps for generating metrics:-  
       1. Insert the plugin in pom.xml
+      ```
+      <plugin>
+      <groupId>org.pitest</groupId>
+      <artifactId>pitest-maven</artifactId>
+      <version>LATEST</version>
+      </plugin>
+      ```
       2. Run Maven Clean Goal and test goal.
   
     * We get the reports in a Pit-test reports folder after successfully running pit-test plugin.  
