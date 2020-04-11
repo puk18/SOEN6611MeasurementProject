@@ -10,7 +10,7 @@ The main folder contains four folders and two scripts:
 * ClassLevelCorrelation.py 
 
    
-Each Folder of project contains Metric 1,2&4, Metric3, Metric5, Metric6 results obtained from various tools.Where in Metric3 contains metrics for only one version where as rest all the folder contains metrics for 5 versions of each project 
+Each Folder of project contains Metric 1,2&4, Metric3, Metric5, Metric6 results obtained from various tools,where in Metric3 contains metrics for only one version of each project where as rest all the folder contains metrics for 5 versions of each project. 
 Each folder also contains Correlation.csv which are the results of correlation between different metrics respectively
     
     
