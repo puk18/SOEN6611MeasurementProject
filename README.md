@@ -1,6 +1,6 @@
 # SOEN6611MeasurementProject
 
-##Project Structure  
+# Project Structure  
 The main folder is called Project, which contains five folders:    
 * CommonCollections.    
 * Common Configuration.  
@@ -14,7 +14,7 @@ Each Folders of project contains 'Metric 1,2,4', Metric3, Metric5, Metric6 resul
 Each folder also contains Correlation.csv which are the results of correlation between different metrics respectively
     
     
-##Requirements for running the Scripts and tools 
+# Requirements for running the Scripts and tools 
 
 1. Jacoco Maven Plugin:-  
    * This Plugin is used to collect data for Metric 1,2 and 4.
@@ -34,7 +34,7 @@ Each folder also contains Correlation.csv which are the results of correlation b
 3. Code Churn  
   Download and install cloc  
   
-  #### Command used :  
+  Command used :  
     cloc --diff “version1Code” “Version2Code” --out=version.csv  
     
   This creates a file .csv files that contains the count of files ,blank lines, commented lines and lines of code that are same, added , modified and removed between two versions of projects
@@ -59,9 +59,9 @@ Thus we would have all the correlation results in correlation.csv file
 
 ## Team Details  
 
-  - PULKIT WADHWA       || 40082832 || pulkitwadhwa95@gmail.com
-  - ZINNIA RANA         || 40074965 || zinnia.rana1@gmail.com
-  - BIRJOT SINGH        || 40096078 || birjot1996@gmail.com
-  - JATIN RUPEJA        || 40084383 || atul12nov@gmail.com
-  - Sahil Savaliya      || 40080380 || sahiladg@gmail.com
+  PULKIT WADHWA       || 40082832 || pulkitwadhwa95@gmail.com
+  ZINNIA RANA         || 40074965 || zinnia.rana1@gmail.com
+  BIRJOT SINGH        || 40096078 || birjot1996@gmail.com
+  JATIN RUPEJA        || 40084383 || atul12nov@gmail.com
+  Sahil Savaliya      || 40080380 || sahiladg@gmail.com
 
