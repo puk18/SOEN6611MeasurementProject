@@ -52,9 +52,16 @@ Each folder also contains Correlation.csv which are the results of correlation b
    * Code churn =linesadded+modified+removed
 
 
-4. SonarQube/SonarLint
+4. SonarQube
    * Steps for generating metrics:-  
       1. Insert the plugin in pom.xml
+      ```
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>3.6.0.1398</version>
+      </plugin>
+      ```
       2. Run Maven Clean Goal and test goal with goal clean install sonar:sonar -Dsonar.host.url=http://localhost:9000
   
    * The results can then be seen at localhost:9000
